@@ -57,7 +57,40 @@ if (!is_wp_error($categories_url) && !empty($categories_url)) {
 <header class="gs-site-header">
     <div class="gs-container gs-header-inner">
         <a class="gs-logo" href="<?php echo esc_url(home_url('/')); ?>" aria-label="<?php esc_attr_e('KitScore home', 'kitscore'); ?>">
-            <span class="gs-logo-mark" aria-hidden="true"><?php kitscore_trophy_icon(); ?></span>
+            <svg class="gs-logo-3d-trophy" width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="ks-cup-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#0082C3"/>
+                  <stop offset="100%" stop-color="#005F8E"/>
+                </linearGradient>
+                <linearGradient id="ks-base-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#0082C3"/>
+                  <stop offset="100%" stop-color="#005F8E"/>
+                </linearGradient>
+              </defs>
+              <!-- Cup body front face (trapezoid) -->
+              <path d="M11 4 L25 4 L22 19 L14 19 Z" fill="url(#ks-cup-grad)"/>
+              <!-- Cup body left dark face for 3D depth illusion -->
+              <path d="M8 4 L11 4 L14 19 L11 21 Z" fill="#004A75"/>
+              <!-- Left handle -->
+              <path d="M11 7 C7 8 6 13 9 15 L11 15" fill="none" stroke="#005F8E" stroke-width="1.5" stroke-linecap="round"/>
+              <!-- Right handle -->
+              <path d="M25 7 C29 8 30 13 27 15 L25 15" fill="none" stroke="#005F8E" stroke-width="1.5" stroke-linecap="round"/>
+              <!-- Highlight stroke on top-left rim -->
+              <path d="M8 4 L25 4" stroke="rgba(255,255,255,0.6)" stroke-width="1.2" stroke-linecap="round"/>
+              <!-- Star on cup -->
+              <path d="M18 8.5 L18.9 11.2 L21.8 11.2 L19.5 12.9 L20.3 15.6 L18 13.8 L15.7 15.6 L16.5 12.9 L14.2 11.2 L17.1 11.2 Z" fill="rgba(255,255,255,0.55)"/>
+              <!-- Stem front -->
+              <rect x="15.5" y="19" width="5" height="3.5" fill="url(#ks-cup-grad)"/>
+              <!-- Stem left dark face -->
+              <rect x="13.5" y="19" width="2" height="3.5" fill="#004A75"/>
+              <!-- Base front face -->
+              <rect x="10" y="22.5" width="16" height="5" rx="1" fill="url(#ks-base-grad)"/>
+              <!-- Base left dark face -->
+              <path d="M8 23.5 L10 22.5 L10 27.5 L8 27.5 Z" fill="#004A75"/>
+              <!-- Base top highlight -->
+              <path d="M8 23.5 L26 22.5" stroke="rgba(255,255,255,0.6)" stroke-width="0.8" stroke-linecap="round"/>
+            </svg>
             <span>KitScore</span>
         </a>
         <div class="gs-nav-search-wrap">
@@ -69,7 +102,7 @@ if (!is_wp_error($categories_url) && !empty($categories_url)) {
                         <path d="m21 21-4.3-4.3"></path>
                     </svg>
                 </span>
-                <input id="gs-header-search" type="search" name="s" value="<?php echo esc_attr(get_search_query()); ?>" placeholder="<?php esc_attr_e('Search gear, brands, sports...', 'kitscore'); ?>">
+                <input id="gs-header-search" class="gs-search-input" type="search" name="s" value="<?php echo esc_attr(get_search_query()); ?>" placeholder="<?php esc_attr_e('Search gear, brands, sports...', 'kitscore'); ?>">
                 <input type="hidden" name="post_type" value="product_review">
             </form>
         </div>

@@ -5,7 +5,7 @@
 
 get_header();
 
-/* ── Helper: get review rows (ACF repeater → meta fallback → WP comments) ── */
+/* Helper: get review rows from user_reviews meta only. */
 if (!function_exists('kitscore_get_review_rows')) {
     function kitscore_get_review_rows(int $post_id): array
     {
@@ -28,41 +28,38 @@ if (!function_exists('kitscore_get_review_rows')) {
             }
             $rows = $normalized;
         } else {
-            // 2. Serialised ACF meta
-            $count = (int) get_post_meta($post_id, 'user_reviews', true);
-            for ($i = 0; $i < $count; $i++) {
-                $rows[] = [
-                    'reviewer_name'   => (string) get_post_meta($post_id, "user_reviews_{$i}_reviewer_name", true),
-                    'reviewer_rating' => (int) get_post_meta($post_id, "user_reviews_{$i}_reviewer_rating", true),
-                    'review_date'     => (string) get_post_meta($post_id, "user_reviews_{$i}_review_date", true),
-                    'review_text'     => (string) get_post_meta($post_id, "user_reviews_{$i}_review_text", true),
-                    'verified'        => (bool) get_post_meta($post_id, "user_reviews_{$i}_verified_purchase", true),
-                ];
+            $stored_reviews = get_post_meta($post_id, 'user_reviews', true);
+
+            if (is_array($stored_reviews)) {
+                foreach ($stored_reviews as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+
+                    $rows[] = [
+                        'reviewer_name'   => trim((string) ($row['reviewer_name'] ?? '')),
+                        'reviewer_rating' => (int) ($row['reviewer_rating'] ?? 0),
+                        'review_date'     => (string) ($row['review_date'] ?? ''),
+                        'review_text'     => (string) ($row['review_text'] ?? ''),
+                        'verified'        => !empty($row['verified_purchase']) || !empty($row['verified']),
+                    ];
+                }
+            } else {
+                // 2. ACF repeater row meta
+                $count = (int) $stored_reviews;
+                for ($i = 0; $i < $count; $i++) {
+                    $rows[] = [
+                        'reviewer_name'   => (string) get_post_meta($post_id, "user_reviews_{$i}_reviewer_name", true),
+                        'reviewer_rating' => (int) get_post_meta($post_id, "user_reviews_{$i}_reviewer_rating", true),
+                        'review_date'     => (string) get_post_meta($post_id, "user_reviews_{$i}_review_date", true),
+                        'review_text'     => (string) get_post_meta($post_id, "user_reviews_{$i}_review_text", true),
+                        'verified'        => (bool) get_post_meta($post_id, "user_reviews_{$i}_verified_purchase", true),
+                    ];
+                }
             }
         }
 
-        $rows = array_values(array_filter($rows, static fn($r) => is_array($r) && !empty($r['review_text'])));
-
-        // 3. WP comments fallback
-        if (!$rows) {
-            $comments = get_comments([
-                'post_id' => $post_id,
-                'status'  => 'approve',
-                'type'    => 'comment',
-                'number'  => 50,
-            ]);
-            foreach ($comments as $c) {
-                $rows[] = [
-                    'reviewer_name'   => $c->comment_author ?: __('Verified Reviewer', 'kitscore'),
-                    'reviewer_rating' => 4,
-                    'review_date'     => $c->comment_date,
-                    'review_text'     => strip_tags($c->comment_content),
-                    'verified'        => false,
-                ];
-            }
-        }
-
-        return $rows;
+        return array_values(array_filter($rows, static fn($r) => is_array($r) && !empty($r['review_text'])));
     }
 }
 
@@ -89,7 +86,7 @@ if (!function_exists('kitscore_rev_stars_html')) {
 /* ── Data ── */
 $selected_category = isset($_GET['sport_category']) ? sanitize_text_field(wp_unslash($_GET['sport_category'])) : '';
 $selected_product  = isset($_GET['product_id'])     ? absint($_GET['product_id']) : 0;
-$reviews_action    = get_permalink();
+$reviews_action    = get_post_type_archive_link('product_review') ?: home_url('/reviews/');
 
 $categories = get_terms(['taxonomy' => 'sport_category', 'hide_empty' => true, 'orderby' => 'name']);
 if (is_wp_error($categories)) {
@@ -182,7 +179,9 @@ $product_title  = $selected_product ? get_the_title($selected_product) : '';
         <!-- Summary card -->
         <section class="gs-rev-summary-card" aria-label="<?php esc_attr_e('Review summary', 'kitscore'); ?>">
             <?php if ($product_title) : ?>
-                <h2 class="gs-rev-summary-product"><?php echo esc_html($product_title); ?></h2>
+                <h2 class="gs-rev-summary-product">
+                    <a href="<?php echo esc_url(get_permalink($selected_product)); ?>"><?php echo esc_html($product_title); ?></a>
+                </h2>
             <?php endif; ?>
             <div class="gs-rev-summary-inner">
                 <div class="gs-rev-summary-score">
@@ -199,29 +198,35 @@ $product_title  = $selected_product ? get_the_title($selected_product) : '';
                 <div class="gs-rev-rating-bars" aria-label="<?php esc_attr_e('Rating breakdown', 'kitscore'); ?>">
                     <?php foreach ([5, 4, 3, 2, 1] as $star) :
                         $pct = $review_count ? round(($rating_counts[$star] / $review_count) * 100) : 0; ?>
-                        <div class="gs-rev-bar-row">
+                        <button class="gs-rev-bar-row" type="button" data-star-filter="<?php echo esc_attr($star); ?>" aria-pressed="false">
                             <span class="gs-rev-bar-label"><?php echo esc_html($star); ?> &#9733;</span>
                             <span class="gs-rev-bar-track" role="progressbar" aria-valuenow="<?php echo esc_attr($pct); ?>" aria-valuemin="0" aria-valuemax="100">
                                 <span class="gs-rev-bar-fill" style="width:<?php echo esc_attr($pct); ?>%"></span>
                             </span>
-                            <span class="gs-rev-bar-pct"><?php echo esc_html($pct); ?>%</span>
-                        </div>
+                            <span class="gs-rev-bar-pct">
+                                <?php echo esc_html($pct); ?>%
+                                <span class="gs-rev-clear-filter"><?php esc_html_e('Clear filter', 'kitscore'); ?></span>
+                            </span>
+                        </button>
                     <?php endforeach; ?>
                 </div>
             </div>
         </section>
 
         <!-- Review cards grid -->
+        <p class="gs-rev-filter-status" hidden></p>
+        <p class="gs-rev-no-filter-results" hidden><?php esc_html_e('No reviews with this rating yet.', 'kitscore'); ?></p>
         <div class="gs-rev-grid" role="list" aria-label="<?php esc_attr_e('User reviews', 'kitscore'); ?>">
             <?php foreach ($reviews as $rev) :
+                $text = (string) ($rev['review_text'] ?? '');
+                if (empty(trim($text))) { continue; }
                 $name     = trim((string) ($rev['reviewer_name'] ?? __('Verified Reviewer', 'kitscore')));
                 $rating   = max(1, min(5, (int) ($rev['reviewer_rating'] ?? 4)));
                 $raw_date = (string) ($rev['review_date'] ?? '');
                 $date_fmt = $raw_date ? date_i18n(get_option('date_format'), strtotime($raw_date)) : '';
-                $text     = (string) ($rev['review_text'] ?? '');
                 $verified = !empty($rev['verified']);
             ?>
-                <article class="gs-rev-card" role="listitem">
+                <article class="gs-rev-card" role="listitem" data-rating="<?php echo esc_attr($rating); ?>">
                     <div class="gs-rev-card-top">
                         <span class="gs-rev-avatar" aria-hidden="true"><?php echo esc_html(kitscore_rev_initials($name)); ?></span>
                         <div class="gs-rev-meta">
@@ -254,7 +259,7 @@ $product_title  = $selected_product ? get_the_title($selected_product) : '';
                     <line x1="15" y1="10" x2="15.01" y2="10"/>
                 </svg>
             </div>
-            <p class="gs-rev-empty-msg"><?php esc_html_e('No reviews yet for this product.', 'kitscore'); ?></p>
+            <p class="gs-rev-empty-msg"><?php esc_html_e('No reviews available for this product yet.', 'kitscore'); ?></p>
             <p class="gs-rev-empty-note"><?php esc_html_e('Reviews are sourced from Decathlon product pages.', 'kitscore'); ?></p>
         </div>
 
@@ -301,6 +306,71 @@ $product_title  = $selected_product ? get_the_title($selected_product) : '';
       return;
     }
     loadFromAjax(slug);
+  });
+
+  var ratingRows = [].slice.call(document.querySelectorAll('.gs-rev-bar-row[data-star-filter]'));
+  var reviewCards = [].slice.call(document.querySelectorAll('.gs-rev-card[data-rating]'));
+  var filterStatus = document.querySelector('.gs-rev-filter-status');
+  var noResults = document.querySelector('.gs-rev-no-filter-results');
+  var activeRating = null;
+
+  function updateRatingFilter(nextRating) {
+    activeRating = activeRating === nextRating ? null : nextRating;
+
+    var visibleCount = 0;
+    reviewCards.forEach(function (card) {
+      var isVisible = !activeRating || card.getAttribute('data-rating') === activeRating;
+      card.hidden = !isVisible;
+      if (isVisible) {
+        visibleCount++;
+      }
+    });
+
+    ratingRows.forEach(function (row) {
+      var isActive = row.getAttribute('data-star-filter') === activeRating;
+      row.classList.toggle('is-active', isActive);
+      row.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+
+    if (filterStatus) {
+      if (activeRating) {
+        filterStatus.hidden = false;
+        filterStatus.textContent = 'Showing ' + visibleCount + ' ' + (visibleCount === 1 ? 'review' : 'reviews') + ' with ' + activeRating + ' ' + (activeRating === '1' ? 'star' : 'stars');
+      } else {
+        filterStatus.hidden = true;
+        filterStatus.textContent = '';
+      }
+    }
+
+    if (noResults) {
+      noResults.hidden = !activeRating || visibleCount > 0;
+      noResults.style.display = activeRating && visibleCount === 0 ? 'block' : 'none';
+    }
+  }
+
+  ratingRows.forEach(function (row) {
+    row.addEventListener('click', function () {
+      updateRatingFilter(row.getAttribute('data-star-filter'));
+    });
+  });
+
+  /* Ensure product_id is present before form submits */
+  var reviewsForm = document.querySelector('.gs-reviews-form');
+  if (reviewsForm) {
+    reviewsForm.addEventListener('submit', function (e) {
+      var pid = prodSel.value;
+      if (!pid) {
+        e.preventDefault();
+        prodSel.focus();
+        prodSel.classList.add('gs-input-error');
+        return;
+      }
+      prodSel.classList.remove('gs-input-error');
+    });
+  }
+
+  prodSel.addEventListener('change', function () {
+    prodSel.classList.remove('gs-input-error');
   });
 })();
 </script>

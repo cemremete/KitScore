@@ -42,7 +42,7 @@ $default_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
     <img class="gs-hero-slide" src="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=1600&q=80" alt="">
   </div>
   <div class="gs-hero-overlay" aria-hidden="true"></div>
-  <div class="gs-container gs-hero-inner">
+  <div class="gs-hero-inner">
     <div class="gs-hero-content">
       <h1>Expert Reviews for Every Athlete</h1>
       <p><?php esc_html_e('In-depth analysis and scoring of the latest sports equipment to help you perform at your best', 'kitscore'); ?></p>
@@ -136,7 +136,22 @@ $default_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
 
             while ($top_rated->have_posts()) :
                 $top_rated->the_post();
-                kitscore_render_home_product_card(get_the_ID());
+                $post_id = get_the_ID();
+                $acf_review_count = 0;
+
+                if (function_exists('have_rows')) {
+                    while (have_rows('user_reviews', $post_id)) {
+                        the_row();
+                        $acf_review_count++;
+                    }
+
+                    if (function_exists('reset_rows')) {
+                        reset_rows();
+                    }
+                }
+
+                $review_count = $acf_review_count + (int) get_comments_number($post_id);
+                kitscore_render_home_product_card($post_id, $review_count);
             endwhile;
             wp_reset_postdata();
             ?>

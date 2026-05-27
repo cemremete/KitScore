@@ -221,6 +221,13 @@ function kitscore_product_image_url(?int $post_id = null): string
         return get_the_post_thumbnail_url($post_id, 'large');
     }
 
+    if (function_exists('get_field')) {
+        $acf_img = get_field('image_url', $post_id);
+        if ($acf_img) {
+            return (string) $acf_img;
+        }
+    }
+
     return (string) kitscore_get_field_value('gs_product_image', $post_id, 'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=1200&q=80');
 }
 
@@ -286,12 +293,30 @@ function kitscore_render_product_card(int $post_id): void
     <?php
 }
 
-function kitscore_render_home_product_card(int $post_id): void
+function kitscore_get_total_review_count(int $post_id): int
+{
+    $acf_review_count = 0;
+
+    if (function_exists('have_rows')) {
+        while (have_rows('user_reviews', $post_id)) {
+            the_row();
+            $acf_review_count++;
+        }
+
+        if (function_exists('reset_rows')) {
+            reset_rows();
+        }
+    }
+
+    return $acf_review_count + (int) get_comments_number($post_id);
+}
+
+function kitscore_render_home_product_card(int $post_id, ?int $review_count = null): void
 {
     $score = (float) kitscore_get_field_value(kitscore_score_meta_key(), $post_id, 0);
     $terms = get_the_terms($post_id, 'sport_category');
     $category = (!is_wp_error($terms) && !empty($terms)) ? $terms[0] : null;
-    $review_count = (int) get_comments_number($post_id);
+    $review_count = $review_count ?? kitscore_get_total_review_count($post_id);
     ?>
     <article class="gs-product-card gs-home-product-card">
         <a class="gs-product-media" href="<?php echo esc_url(get_permalink($post_id)); ?>">
@@ -308,7 +333,11 @@ function kitscore_render_home_product_card(int $post_id): void
             <h3><a href="<?php echo esc_url(get_permalink($post_id)); ?>"><?php echo esc_html(get_the_title($post_id)); ?></a></h3>
             <div class="gs-stars" aria-label="<?php esc_attr_e('Four out of five stars', 'kitscore'); ?>">
                 <span aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9734;</span>
-                <small><?php echo esc_html(sprintf(_n('%d review', '%d reviews', $review_count, 'kitscore'), $review_count)); ?></small>
+                <?php if ($review_count > 0) : ?>
+                    <small><?php echo esc_html(sprintf(_n('%d review', '%d reviews', $review_count, 'kitscore'), $review_count)); ?></small>
+                <?php else : ?>
+                    <small class="gs-no-reviews"><?php esc_html_e('Be the first to review', 'kitscore'); ?></small>
+                <?php endif; ?>
             </div>
         </div>
     </article>
@@ -341,6 +370,58 @@ function kitscore_ajax_products_by_cat(): void
     }
 
     wp_send_json($products);
+}
+
+add_action('wp_ajax_ks_load_product_reviews', 'kitscore_ajax_load_product_reviews');
+add_action('wp_ajax_nopriv_ks_load_product_reviews', 'kitscore_ajax_load_product_reviews');
+function kitscore_ajax_load_product_reviews(): void
+{
+    $product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+
+    error_log('[KitScore] ks_load_product_reviews received product_id=' . $product_id);
+
+    if (!$product_id) {
+        wp_send_json_error(['message' => 'No product_id received'], 400);
+        return;
+    }
+
+    $post = get_post($product_id);
+    if (!$post || $post->post_type !== 'product_review' || $post->post_status !== 'publish') {
+        error_log('[KitScore] ks_load_product_reviews: invalid product for id=' . $product_id);
+        wp_send_json_error(['message' => 'Invalid product'], 404);
+        return;
+    }
+
+    $reviews = function_exists('kitscore_get_review_rows') ? kitscore_get_review_rows($product_id) : [];
+
+    error_log('[KitScore] ks_load_product_reviews: returning ' . count($reviews) . ' reviews for product_id=' . $product_id);
+
+    wp_send_json_success([
+        'product_id'    => $product_id,
+        'product_title' => get_the_title($post),
+        'post_link'     => get_permalink($product_id),
+        'image_url'     => kitscore_product_image_url($product_id),
+        'reviews'       => $reviews,
+        'count'         => count($reviews),
+    ]);
+}
+
+add_action('admin_init', 'kitscore_cleanup_anon_comments_once');
+function kitscore_cleanup_anon_comments_once(): void
+{
+    if (get_option('kitscore_anon_cleanup_done')) {
+        return;
+    }
+    global $wpdb;
+    $ids = $wpdb->get_col(
+        "SELECT comment_ID FROM {$wpdb->comments}
+         WHERE (comment_author = 'Anonymous' OR comment_content = '')
+         AND LENGTH(comment_content) < 20"
+    );
+    foreach ($ids as $id) {
+        wp_delete_comment((int) $id, true);
+    }
+    update_option('kitscore_anon_cleanup_done', true);
 }
 
 add_action('pre_get_posts', 'kitscore_apply_product_filters');
