@@ -68,6 +68,29 @@ wp_reset_postdata();
                 <?php the_content(); ?>
             </article>
 
+            <?php
+            $features = function_exists('get_field') ? get_field('features', get_the_ID()) : '';
+            if ($features) :
+                $features_list = is_array($features) ? $features : array_filter(array_map('trim', explode("\n", $features)));
+                if (!empty($features_list)) :
+                    ?>
+                    <div class="gs-features-section" style="margin: 24px 0;">
+                        <h3 style="font-size:16px;font-weight:700;color:var(--gs-text);margin-bottom:12px;"><?php esc_html_e('Product Features', 'kitscore'); ?></h3>
+                        <ul style="margin:0;padding:0;list-style:none;">
+                            <?php foreach ($features_list as $feature) : ?>
+                                <?php if (empty(trim((string) $feature))) continue; ?>
+                                <li style="padding:6px 0;padding-left:20px;position:relative;font-size:14px;color:var(--gs-text);line-height:1.5;border-bottom:1px solid var(--gs-border);">
+                                    <span style="position:absolute;left:0;color:#0082C3;font-weight:700;">&rsaquo;</span>
+                                    <?php echo esc_html(trim((string) $feature)); ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                    <?php
+                endif;
+            endif;
+            ?>
+
             <section class="gs-review-section">
                 <h2><?php esc_html_e('Pros and Cons', 'kitscore'); ?></h2>
                 <div class="gs-pros-cons">

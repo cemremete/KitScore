@@ -8,18 +8,7 @@ if (!defined('ABSPATH')) {
 }
 
 $reviews_url = get_post_type_archive_link('product_review') ?: home_url('/reviews/');
-$categories_url = get_terms([
-    'taxonomy' => 'sport_category',
-    'hide_empty' => false,
-    'number' => 1,
-]);
-
-if (!is_wp_error($categories_url) && !empty($categories_url)) {
-    $term_link = get_term_link($categories_url[0]);
-    $categories_url = is_wp_error($term_link) ? $reviews_url : $term_link;
-} else {
-    $categories_url = $reviews_url;
-}
+$categories_url = home_url('/#gs-categories');
 ?><!doctype html>
 <html <?php language_attributes(); ?>>
 <head>

@@ -93,7 +93,7 @@ $default_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
 })();
 </script>
 
-<section class="gs-section gs-featured-categories" id="browse-by-sport">
+<section id="gs-categories" class="gs-section gs-featured-categories">
     <div class="gs-container">
         <div class="gs-section-title">
             <h2><?php esc_html_e('Browse by Sport', 'kitscore'); ?></h2>
